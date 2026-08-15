@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(curl -s -X POST http://localhost:8080/api/users/login -H 'Content-Type: application/json' -d '{\"email\":\"xiaohua@example.com\",\"password\":\"Hexschool12345\"}')",
+      "Bash(curl -s -X POST http://localhost:8080/api/users/login -H 'Content-Type: application/json' -d '{\"email\":\"xiaohua@example.com\",\"password\":\"WrongPass123\"}')",
+      "Bash(curl -s -X POST http://localhost:8080/api/users/login -H 'Content-Type: application/json' -d '{\"email\":\"nouser@example.com\",\"password\":\"Hexschool12345\"}')"
+    ]
+  }
+}

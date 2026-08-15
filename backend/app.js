@@ -6,6 +6,7 @@ const { dataSource } = require("./db/data-source");
 const appError = require("./utils/appError");
 const skill = require("./router/skill");
 const creditPackage = require("./router/credit-package");
+const users = require("./router/users");
 
 const app = express();
 app.use(cors());
@@ -13,7 +14,7 @@ app.use(express.json());
 app.use(bodyParser.json());
 app.use("/api/coaches/skill", skill);
 app.use("/api/credit-package", creditPackage);
-
+app.use("/api/users", users);
 
 // API
 app.get("/healthcheck", async (req, res, next) => {
