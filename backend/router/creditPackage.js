@@ -1,4 +1,4 @@
-const creditPackageController = require("../controllers/credit-package");
+const creditPackageController = require("../controllers/creditPackage");
 
 const router = require("express").Router();
 

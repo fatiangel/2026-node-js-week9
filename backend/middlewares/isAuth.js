@@ -21,22 +21,25 @@ async function isAuth(req, res, next) {
     
         // 3. 用 decoded.id 查 User
         const userRepo = dataSource.getRepository("User");
-        const user = await userRepo.findOneBy({ id: decoded.id });
+        // DAO service層
+        const findUserId = await userRepo.findOneBy({ id: decoded.id });
         //token 無效（內容不對、或查無此使用者）：「無效的 token」 ⚠️「請先登入」是四句固定錯誤訊息文字之一，一個字都不能改。
-        if (!user) {
+        if (!findUserId) {
             return next(appError(401, "無效的 token"));
         }
     
         // 4. 掛到 req.user，後續 controller 就能用
-        req.user = user;
+        req.user = findUserId;
         next();
     } catch (err) {
         // token 已過期：「Token 已過期」
+        // jwt.verify ===> name = TokenExpiredError
         if (err.name === "TokenExpiredError") {
             return next(appError(401, "Token 已過期"));
         }
-        // token 無效（內容不對、或查無此使用者）：「無效的 token」 ⚠️「請先登入」是四句固定錯誤訊息文字之一，一個字都不能改。
+        // token 無效（內容不對、或查無此使用者）：「無效的 token」 
         return next(appError(401, "無效的 token"));
+        // ⚠️「請先登入」是四句固定錯誤訊息文字之一，一個字都不能改。
     }
 }
 module.exports = isAuth;

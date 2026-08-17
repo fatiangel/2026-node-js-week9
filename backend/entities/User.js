@@ -35,13 +35,15 @@ module.exports = new EntitySchema({
             nullable: false,
         },
         // created_at、updated_at（建立／更新時間，由系統自動帶入）
-        created_at: {
+        createdAt: {
             type: "timestamp",
             createDate: true,
+            name: "created_at",
         },
-        updated_at: {
+        updatedAt: {
             type: "timestamp",
             updateDate: true,
+            name: "updated_at",
         },
     }
 });

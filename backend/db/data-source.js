@@ -29,7 +29,6 @@ const dataSource = new DataSource({
         CreditPackage,
         CreditPurchase
     ],
-        
 });
 
 module.exports = { dataSource };

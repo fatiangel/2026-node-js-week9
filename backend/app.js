@@ -5,8 +5,9 @@ const config = require("./config/index");
 const { dataSource } = require("./db/data-source");
 const appError = require("./utils/appError");
 const skill = require("./router/skill");
-const creditPackage = require("./router/credit-package");
+const creditPackage = require("./router/creditPackage");
 const users = require("./router/users");
+const admin = require("./router/admin");
 
 const app = express();
 app.use(cors());
@@ -15,6 +16,7 @@ app.use(bodyParser.json());
 app.use("/api/coaches/skill", skill);
 app.use("/api/credit-package", creditPackage);
 app.use("/api/users", users);
+app.use("/api/admin", admin);
 
 // API
 app.get("/healthcheck", async (req, res, next) => {

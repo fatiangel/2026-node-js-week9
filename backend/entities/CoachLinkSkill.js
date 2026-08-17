@@ -20,9 +20,10 @@ module.exports = new EntitySchema({
             type: "uuid",
             nullable: false,
         },
-        created_at: {
+        createdAt: {
             type: "timestamp",
             createDate: true,
+            name: "created_at",
             nullable: false,
         }
     },

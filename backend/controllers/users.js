@@ -55,9 +55,12 @@ const userController = {
                 return next(appError(400, "密碼不符合規則，需要包含英文數字大小寫，最短8個字，最長16個字"));
             }
 
+            // 3. 帳號不存在「或」密碼比對錯誤
+            // （⚠️ 兩種情況共用同一句，避免洩漏帳號是否存在）：「使用者不存在或密碼輸入錯誤」
             const userRepo = dataSource.getRepository("User");
+            // 3-1. 帳號不存在
             const findUser = await userRepo.findOneBy({ email: email.trim().toLowerCase() });
-            // 3. 帳號不存在「或」密碼比對錯誤（⚠️ 兩種情況共用同一句，避免洩漏帳號是否存在）：「使用者不存在或密碼輸入錯誤」
+            // 3-2. 密碼比對錯誤
             const isMatched = findUser && await bcrypt.compare(password.trim(), findUser.password);
             if (!findUser || !isMatched) {
                 return next(appError(400, "使用者不存在或密碼輸入錯誤"));
@@ -66,7 +69,10 @@ const userController = {
             // jwtSecret: process.env.JWT_SECRET || "mysecretkey",
             // jwtExpiresDay: process.env.JWT_EXPIRES_DAY || "7d",
             const token = jwt.sign(
-                { id: findUser.id, role: findUser.role },
+                {
+                    id: findUser.id, 
+                    role: findUser.role
+                },
                 config.get("secret.jwtSecret"),
                 { expiresIn: config.get("secret.jwtExpiresDay") }
             );
@@ -86,12 +92,8 @@ const userController = {
     },
     async getProfile(req, res, next) {
         // req.user 是 isAuth middleware 掛上去的，裡面有 id、name、email、role、createdAt、updatedAt
+        // isAuth 已經確認過使用者存在（查無此人會在那裡回 401「無效的 token」），這裡不用再查一次
         try {
-            const userRepo = dataSource.getRepository("User");
-            const findUser = await userRepo.findOneBy({ id: req.user.id });
-
-            if(!findUser) { return next(appError(404, "使用者不存在")); }
-
             res.status(200).json({
                 status: "success",
                 data: {
@@ -108,7 +110,7 @@ const userController = {
     async updateProfile(req, res, next) {
         try {
             const { name } = req.body;
-            // 觸發條件：name 沒給、不是字串、或為空字串：「欄位未填寫正確」
+            // 觸發條件：name 缺漏或為空字串
             if (!isValidString(name)) {
                 return next(appError(400, "欄位未填寫正確"));
             }
@@ -144,21 +146,21 @@ const userController = {
         try {
             const { password, new_password, confirm_new_password } = req.body;
 
-            // 1. 三個欄位任一缺漏或為空字串：「欄位未填寫正確」
+            // 觸發條件：1. 三個欄位任一缺漏或為空字串：「欄位未填寫正確」
             if (!isValidString(password) || !isValidString(new_password) || !isValidString(confirm_new_password)) {
                 return next(appError(400, "欄位未填寫正確"));
             }
 
-            // 2. 三個欄位全部都要符合密碼規則：「密碼不符合規則，需要包含英文數字大小寫，最短8個字，最長16個字」
+            // 觸發條件：2. 三個欄位全部都要符合密碼規則：「密碼不符合規則，需要包含英文數字大小寫，最短8個字，最長16個字」
             if (!isValidPassword(password) || !isValidPassword(new_password) || !isValidPassword(confirm_new_password)) {
                 return next(appError(400, "密碼不符合規則，需要包含英文數字大小寫，最短8個字，最長16個字"));
             }
 
-            // 3. 新密碼不能與舊密碼相同：「新密碼不能與舊密碼相同」
+            // 觸發條件：3. 新密碼不能與舊密碼相同：「新密碼不能與舊密碼相同」
             if (new_password === password) {
                 return next(appError(400, "新密碼不能與舊密碼相同"));
             }
-            // 新密碼與驗證新密碼不一致：「新密碼與驗證新密碼不一致」
+            // 觸發條件：新密碼與驗證新密碼不一致：「新密碼與驗證新密碼不一致」
             if (new_password !== confirm_new_password) {
                 return next(appError(400, "新密碼與驗證新密碼不一致"));
             }
@@ -166,7 +168,7 @@ const userController = {
             const userRepo = dataSource.getRepository("User");
             const findUser = await userRepo.findOneBy({ id: req.user.id });
 
-            // 4. 舊密碼比對錯誤：「密碼輸入錯誤」
+            // 觸發條件：4. 舊密碼比對錯誤：「密碼輸入錯誤」
             const isPasswordCorrect = await bcrypt.compare(password, findUser.password);
             if (!isPasswordCorrect) {
                 return next(appError(400, "密碼輸入錯誤"));

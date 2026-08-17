@@ -51,23 +51,16 @@ module.exports = new EntitySchema({
             length: 2048,
             nullable: true, // ← 已有資料，必須允許為空
         },
-        coach_name: {
-            type: "varchar",
-            length: 50,
-            nullable: false,
-        },
-        canceled_at: {
-            type: "timestamp",
-            nullable: true, // 當課程被取消時，由系統自動帶入
-        },
         // created_at、updated_at（建立／更新時間，由系統自動帶入）
-        created_at: {
+        createdAt: {
             type: "timestamp",
             createDate: true,
+            name: "created_at",
         },
-        updated_at: {
+        updatedAt: {
             type: "timestamp",
             updateDate: true,
+            name: "updated_at",
         }
     },
       relations: {
