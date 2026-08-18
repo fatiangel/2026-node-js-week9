@@ -1,5 +1,8 @@
 // utils/validUtils.js — 驗證工具函式
 
+const isUndefined = (value) => {
+  return value === undefined || value === 'undefined'
+};
 const isValidString = (value) =>
   typeof value === "string" && value.trim() !== "";
 const isInteger = (value) =>
@@ -9,4 +12,4 @@ const isValidInteger = (value) =>
 const isValidPassword = (value) =>
   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,16}$/.test(value);
 
-module.exports = { isValidString, isInteger, isValidInteger, isValidPassword };
+module.exports = { isUndefined, isValidString, isInteger, isValidInteger, isValidPassword };

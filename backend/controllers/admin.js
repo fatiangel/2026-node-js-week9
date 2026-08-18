@@ -22,113 +22,158 @@ const monthMap = {
 }
 
 const adminController = {
-    async postCourse (req, res, next) {
+    async postCoach (req, res, next) {
         try {
-            const { id } = req.user
-            const {
-                skill_id: skillId, name, description, start_at: startAt, end_at: endAt,
-                max_participants: maxParticipants, meeting_url: meetingUrl
-            } = req.body
-            // 400: 欄位驗證失敗時觸發：任
-            // 一欄位缺漏或為空字串、max_participants 不是數字型別的 0 以上整數、meeting_url 不是 https 開頭。
-            if (!isValidString(skillId) ||
-            !isValidString(name) ||
-            !isValidString(description) ||
-            !isValidString(startAt) ||
-            !isValidString(endAt) ||
-            !isValidInteger(maxParticipants) ||
-            !isValidString(meetingUrl) || !meetingUrl.startsWith('https')) {
+            const { userId } = req.params
+            const { experience_years: experienceYears, description, profile_image_url: profileImageUrl = null } = req.body
+            // 400: 欄位缺漏或格式不對（experience_years 不是 0 以上的整數、description 是空字串、profile_image_url 有值但不是 https 開頭）
+            // →「欄位未填寫正確」
+            if (!isValidInteger(experienceYears) ||
+                !isValidString(description) ||
+                (profileImageUrl && (!isValidString(profileImageUrl) || !profileImageUrl.startsWith('https')))) {
                 return next(appError(400, '欄位未填寫正確'))
             }
-            const courseRepo = dataSource.getRepository('Course')
-            const newCourse = courseRepo.create({
-                user_id: id,
-                skill_id: skillId,
-                name,
-                description,
-                start_at: startAt,
-                end_at: endAt,
-                max_participants: maxParticipants,
-                meeting_url: meetingUrl
+            const userRepository = dataSource.getRepository('User')
+            const existingUser = await userRepository.findOne({
+                select: { id: true, name: true, role: true },
+                where: { id: userId }
             })
-            const savedCourse = await courseRepo.save(newCourse)
-            const course = await courseRepo.findOne({
-                where: { id: savedCourse.id }
+
+            // 400: userId 查不到對應的使用者 →「使用者不存在」
+            if (!existingUser) {
+                return next(appError(400, '使用者不存在'))
+            // 409: 該使用者已經是教練（重複升級）
+            } else if (existingUser.role === 'COACH') {
+                return next(appError(409, '使用者已經是教練'))
+            }
+            const coachRepo = dataSource.getRepository('Coach')
+            const newCoach = coachRepo.create({
+                user_id: userId,
+                experience_years: experienceYears,
+                description: description.trim(),
+                profile_image_url: profileImageUrl
             })
+            const updatedUser = await userRepository.update({
+                id: userId,
+                role: 'USER'
+            }, {
+                role: 'COACH'
+            })
+            if (updatedUser.affected === 0) {
+                return next(appError(400, '更新使用者失敗'))
+            }
+            const savedCoach = await coachRepo.save(newCoach)
             res.status(201).json({
                 status: 'success',
-                data: { course }
-            })
-        } catch (error) {
-            next(error)
-        }
-    },
-  
-    async getCoachRevenue (req, res, next) {
-        try {
-            const { id } = req.user
-            const { month } = req.query
-            if (!Object.prototype.hasOwnProperty.call(monthMap, month)) {
-                return next(appError(400, '欄位未填寫正確'))
-            }
-            const courseRepo = dataSource.getRepository('Course')
-            const courses = await courseRepo.find({
-                select: { id: true },
-                where: { user_id: id }
-            })
-            const courseIds = courses.map(course => course.id)
-            if (courseIds.length === 0) {
-                res.status(200).json({
-                    status: 'success',
-                    data: {
-                        total: {
-                            revenue: 0,
-                            participants: 0,
-                            course_count: 0
-                        }
-                    }
-                })
-                return
-            }
-            const courseBookingRepo = dataSource.getRepository('CourseBooking')
-            const year = new Date().getFullYear()
-            const calculateStartAt = dayjs(`${year}-${month}-01`).startOf('month').toISOString()
-            const calculateEndAt = dayjs(`${year}-${month}-01`).endOf('month').toISOString()
-            const courseCount = await courseBookingRepo.createQueryBuilder('course_booking')
-                .select('COUNT(*)', 'count')
-                .where('course_id IN (:...ids)', { ids: courseIds })
-                .andWhere('cancelled_at IS NULL')
-                .andWhere('created_at >= :startDate', { startDate: calculateStartAt })
-                .andWhere('created_at <= :endDate', { endDate: calculateEndAt })
-                .getRawOne()
-            const participants = await courseBookingRepo.createQueryBuilder('course_booking')
-                .select('COUNT(DISTINCT(user_id))', 'count')
-                .where('course_id IN (:...ids)', { ids: courseIds })
-                .andWhere('cancelled_at IS NULL')
-                .andWhere('created_at >= :startDate', { startDate: calculateStartAt })
-                .andWhere('created_at <= :endDate', { endDate: calculateEndAt })
-                .getRawOne()
-            const totalCreditPackage = await dataSource.getRepository('CreditPackage').createQueryBuilder('credit_package')
-                .select('SUM(credit_amount)', 'total_credit_amount')
-                .addSelect('SUM(price)', 'total_price')
-                .getRawOne()
-            const perCreditPrice = totalCreditPackage.total_price / totalCreditPackage.total_credit_amount
-            const totalRevenue = courseCount.count * perCreditPrice
-            res.status(200).json({
-                status: 'success',
                 data: {
-                    total: {
-                        revenue: Math.floor(totalRevenue),
-                        participants: parseInt(participants.count, 10),
-                        course_count: parseInt(courseCount.count, 10)
-                    }
+                    user: { name: existingUser.name, role: 'COACH' },
+                    coach: savedCoach
                 }
             })
         } catch (error) {
             next(error)
         }
     },
-  
+
+    async getCoachProfile (req, res, next) {
+        try {
+            const { id } = req.user
+            const coachRepo = dataSource.getRepository('Coach')
+            const coach = await coachRepo.findOne({
+                select: { id: true, experience_years: true, description: true, profile_image_url: true },
+                where: { user_id: id }
+            })
+            if (!coach) {
+                return next(appError(401, '使用者尚未成為教練'))
+            }
+            const coachSkill = await dataSource.getRepository('CoachLinkSkill').find({
+                select: { skill_id: true },
+                where: { coach_id: coach.id }
+            })
+            
+            res.status(200).json({
+                status: 'success',
+                data: {
+                    id: coach.id,
+                    experience_years: coach.experience_years,
+                    description: coach.description,
+                    profile_image_url: coach.profile_image_url,
+                    skill_ids: coachSkill.length > 0 ? coachSkill.map(({ skill_id: skillId }) => skillId) : []
+                }
+          })
+        } catch (error) {
+            next(error)
+        }
+    },
+
+    async putCoachProfile (req, res, next) {
+        try {
+            const { id } = req.user
+            const {
+                experience_years: experienceYears,
+                description,
+                profile_image_url: profileImageUrl = null,
+                skill_ids: skillIds
+            } = req.body
+            
+            if (!isValidInteger(experienceYears) ||
+                !isValidString(description) ||
+                !isValidString(profileImageUrl) ||
+                !profileImageUrl.startsWith('https') ||
+                !Array.isArray(skillIds) ||
+                skillIds.length === 0 ||
+                skillIds.some(skill => !isValidString(skill))) {
+                return next(appError(400, '欄位未填寫正確'))
+            }
+            const coachRepo = dataSource.getRepository('Coach')
+            const coach = await coachRepo.findOne({
+                select: { id: true },
+                where: { user_id: id }
+            })
+            if (!coach) {
+                return next(appError(401, '使用者尚未成為教練'))
+            }
+            await coachRepo.update({
+                id: coach.id
+            }, {
+                experience_years: experienceYears,
+                description: description.trim(),
+                profile_image_url: profileImageUrl
+            })
+            const newCoachLinkSkill = skillIds.map(skill => ({
+                coach_id: coach.id,
+                skill_id: skill
+            }))
+            await dataSource.transaction(async (manager) => {
+                await manager.delete('CoachLinkSkill', { coach_id: coach.id })
+                await manager.insert('CoachLinkSkill', newCoachLinkSkill)
+            })
+            const result = await coachRepo.find({
+                select: {
+                    id: true,
+                    experience_years: true,
+                    description: true,
+                    profile_image_url: true,
+                    CoachLinkSkill: { skill_id: true }
+                },
+                where: { id: coach.id },
+                relations: { CoachLinkSkill: true }
+            })
+            res.status(200).json({
+                status: 'success',
+                data: {
+                    id: result[0].id,
+                    experience_years: result[0].experience_years,
+                    description: result[0].description,
+                    profile_image_url: result[0].profile_image_url,
+                    skill_ids: result[0].CoachLinkSkill.map(skill => skill.skill_id)
+                }
+            })
+        } catch (error) {
+            next(error)
+        }
+    },
+
     async getCoachCourses (req, res, next) {
         try {
             const { id } = req.user
@@ -184,6 +229,48 @@ const adminController = {
                         participants: courseParticipant ? courseParticipant.count : 0
                     }
                 })
+            })
+        } catch (error) {
+            next(error)
+        }
+    },
+
+    async postCourse (req, res, next) {
+        try {
+            const { id } = req.user
+            const {
+                skill_id: skillId, name, description, start_at: startAt, end_at: endAt,
+                max_participants: maxParticipants, meeting_url: meetingUrl
+            } = req.body
+            // 400: 欄位驗證失敗時觸發：任
+            // 一欄位缺漏或為空字串、max_participants 不是數字型別的 0 以上整數、meeting_url 不是 https 開頭。
+            if (!isValidString(skillId) ||
+            !isValidString(name) ||
+            !isValidString(description) ||
+            !isValidString(startAt) ||
+            !isValidString(endAt) ||
+            !isValidInteger(maxParticipants) ||
+            !isValidString(meetingUrl) || !meetingUrl.startsWith('https')) {
+                return next(appError(400, '欄位未填寫正確'))
+            }
+            const courseRepo = dataSource.getRepository('Course')
+            const newCourse = courseRepo.create({
+                user_id: id,
+                skill_id: skillId,
+                name,
+                description,
+                start_at: startAt,
+                end_at: endAt,
+                max_participants: maxParticipants,
+                meeting_url: meetingUrl
+            })
+            const savedCourse = await courseRepo.save(newCourse)
+            const course = await courseRepo.findOne({
+                where: { id: savedCourse.id }
+            })
+            res.status(201).json({
+                status: 'success',
+                data: { course }
             })
         } catch (error) {
             next(error)
@@ -283,155 +370,71 @@ const adminController = {
             next(error)
         }
     },
-  
-    async postCoach (req, res, next) {
-        try {
-            const { userId } = req.params
-            const { experience_years: experienceYears, description, profile_image_url: profileImageUrl = null } = req.body
-            // 400: 欄位缺漏或格式不對（experience_years 不是 0 以上的整數、description 是空字串、profile_image_url 有值但不是 https 開頭）
-            // →「欄位未填寫正確」
-            if (!isValidInteger(experienceYears) || !isValidString(description) ||
-                (profileImageUrl && isValidString(profileImageUrl) && !profileImageUrl.startsWith('https'))) {
-                return next(appError(400, '欄位未填寫正確'))
-            }
-            const userRepository = dataSource.getRepository('User')
-            const existingUser = await userRepository.findOne({
-                select: { id: true, name: true, role: true },
-                where: { id: userId }
-            })
 
-            // 400: userId 查不到對應的使用者 →「使用者不存在」
-            if (!existingUser) {
-                return next(appError(400, '使用者不存在'))
-            // 409: 該使用者已經是教練（重複升級）
-            } else if (existingUser.role === 'COACH') {
-                return next(appError(409, '使用者已經是教練'))
-            }
-            const coachRepo = dataSource.getRepository('Coach')
-            const newCoach = coachRepo.create({
-                user_id: userId,
-                experience_years: experienceYears,
-                description,
-                profile_image_url: profileImageUrl
-            })
-            const updatedUser = await userRepository.update({
-                id: userId,
-                role: 'USER'
-            }, {
-                role: 'COACH'
-            })
-            if (updatedUser.affected === 0) {
-                return next(appError(400, '更新使用者失敗'))
-            }
-            const savedCoach = await coachRepo.save(newCoach)
-            const savedUser = await userRepository.findOne({
-                select: { name: true, role: true },
-                where: { id: userId }
-            })
-            res.status(201).json({
-                status: 'success',
-                data: {
-                    user: savedUser,
-                    coach: savedCoach
-                }
-            })
-        } catch (error) {
-            next(error)
-        }
-    },
-  
-    async putCoachProfile (req, res, next) {
+    async getCoachRevenue (req, res, next) {
         try {
             const { id } = req.user
-            const {
-                experience_years: experienceYears,
-                description,
-                profile_image_url: profileImageUrl = null,
-                skill_ids: skillIds
-            } = req.body
-            
-            if (!isValidInteger(experienceYears) ||
-                !isValidString(description) ||
-                !isValidString(profileImageUrl) ||
-                !profileImageUrl.startsWith('https') ||
-                !Array.isArray(skillIds)) {
+            const { month } = req.query
+            if (!Object.prototype.hasOwnProperty.call(monthMap, month)) {
                 return next(appError(400, '欄位未填寫正確'))
             }
-            if (skillIds.length === 0 || skillIds.some(skill => !isValidString(skill))) {
-                return next(appError(400, '欄位未填寫正確'))
-            }
-            const coachRepo = dataSource.getRepository('Coach')
-            const coach = await coachRepo.findOne({
+            const courseRepo = dataSource.getRepository('Course')
+            const courses = await courseRepo.find({
                 select: { id: true },
                 where: { user_id: id }
             })
-            await coachRepo.update({
-                id: coach.id
-            }, {
-                experience_years: experienceYears,
-                description,
-                profile_image_url: profileImageUrl
-            })
-            const coachLinkSkillRepo = dataSource.getRepository('CoachLinkSkill')
-            const newCoachLinkSkill = skillIds.map(skill => ({
-                coach_id: coach.id,
-                skill_id: skill
-            }))
-            await coachLinkSkillRepo.delete({ coach_id: coach.id })
-            await coachLinkSkillRepo.insert(newCoachLinkSkill)
-            const result = await coachRepo.find({
-                select: {
-                    id: true,
-                    experience_years: true,
-                    description: true,
-                    profile_image_url: true,
-                    CoachLinkSkill: { skill_id: true }
-                },
-                where: { id: coach.id },
-                relations: { CoachLinkSkill: true }
-            })
+            const courseIds = courses.map(course => course.id)
+            if (courseIds.length === 0) {
+                res.status(200).json({
+                    status: 'success',
+                    data: {
+                        total: {
+                            revenue: 0,
+                            participants: 0,
+                            course_count: 0
+                        }
+                    }
+                })
+                return
+            }
+            const courseBookingRepo = dataSource.getRepository('CourseBooking')
+            const year = new Date().getFullYear()
+            const calculateStartAt = dayjs(`${year}-${month}-01`).startOf('month').toISOString()
+            const calculateEndAt = dayjs(`${year}-${month}-01`).endOf('month').toISOString()
+            const courseCount = await courseBookingRepo.createQueryBuilder('course_booking')
+                .select('COUNT(*)', 'count')
+                .where('course_id IN (:...ids)', { ids: courseIds })
+                .andWhere('cancelled_at IS NULL')
+                .andWhere('created_at >= :startDate', { startDate: calculateStartAt })
+                .andWhere('created_at <= :endDate', { endDate: calculateEndAt })
+                .getRawOne()
+            const participants = await courseBookingRepo.createQueryBuilder('course_booking')
+                .select('COUNT(DISTINCT(user_id))', 'count')
+                .where('course_id IN (:...ids)', { ids: courseIds })
+                .andWhere('cancelled_at IS NULL')
+                .andWhere('created_at >= :startDate', { startDate: calculateStartAt })
+                .andWhere('created_at <= :endDate', { endDate: calculateEndAt })
+                .getRawOne()
+            const totalCreditPackage = await dataSource.getRepository('CreditPackage').createQueryBuilder('credit_package')
+                .select('SUM(credit_amount)', 'total_credit_amount')
+                .addSelect('SUM(price)', 'total_price')
+                .getRawOne()
+            const perCreditPrice = totalCreditPackage.total_price / totalCreditPackage.total_credit_amount
+            const totalRevenue = courseCount.count * perCreditPrice
             res.status(200).json({
                 status: 'success',
                 data: {
-                    id: result[0].id,
-                    experience_years: result[0].experience_years,
-                    description: result[0].description,
-                    profile_image_url: result[0].profile_image_url,
-                    skill_ids: result[0].CoachLinkSkill.map(skill => skill.skill_id)
+                    total: {
+                        revenue: Math.floor(totalRevenue),
+                        participants: parseInt(participants.count, 10),
+                        course_count: parseInt(courseCount.count, 10)
+                    }
                 }
             })
         } catch (error) {
             next(error)
         }
     },
-  
-    async getCoachProfile (req, res, next) {
-        try {
-            const { id } = req.user
-            const coachRepo = dataSource.getRepository('Coach')
-            const coach = await coachRepo.findOne({
-                select: { id: true, experience_years: true, description: true, profile_image_url: true },
-                where: { user_id: id }
-            })
-            const coachSkill = await dataSource.getRepository('CoachLinkSkill').find({
-                select: { skill_id: true },
-                where: { coach_id: coach.id }
-            })
-            
-            res.status(200).json({
-                status: 'success',
-                data: {
-                    id: coach.id,
-                    experience_years: coach.experience_years,
-                    description: coach.description,
-                    profile_image_url: coach.profile_image_url,
-                    skill_ids: coachSkill.length > 0 ? coachSkill.map(({ skill_id: skillId }) => skillId) : []
-                }
-          })
-        } catch (error) {
-            next(error)
-        }
-    }
 }
 
 module.exports = adminController;

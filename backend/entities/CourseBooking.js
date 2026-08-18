@@ -20,25 +20,31 @@ module.exports = new EntitySchema({
             type: 'uuid',
             nullable: false
         },
+        createdAt: {
+            type: 'timestamptz',
+            createDate: true,
+            name: 'created_at',
+            nullable: false
+        },
+        cancelledAt: {
+            type: 'timestamptz',
+            name: 'cancelled_at',
+            nullable: true
+        },
         bookingAt: {
-            type: 'timestamp',
+            type: 'timestamptz',
             createDate: true,
             name: 'booking_at',
             nullable: false
         },
         joinAt: {
-            type: 'timestamp',
+            type: 'timestamptz',
             name: 'join_at',
             nullable: true
         },
         leaveAt: {
-            type: 'timestamp',
+            type: 'timestamptz',
             name: 'leave_at',
-            nullable: true
-        },
-        cancelledAt: {
-            type: 'timestamp',
-            name: 'cancelled_at',
             nullable: true
         },
         cancellationReason: {
@@ -46,16 +52,10 @@ module.exports = new EntitySchema({
             name: 'cancellation_reason',
             length: 255,
             nullable: true
-        },
-        createdAt: {
-            type: 'timestamp',
-            createDate: true,
-            name: 'created_at',
-            nullable: false
         }
     },
     relations: {
-        User: {
+        user: {
             target: 'User',
             type: 'many-to-one',
             joinColumn: {
@@ -64,7 +64,7 @@ module.exports = new EntitySchema({
                 foreignKeyConstraintName: 'course_booking_user_id_fk'
             }
         },
-        Course: {
+        course: {
             target: 'Course',
             type: 'many-to-one',
             joinColumn: {

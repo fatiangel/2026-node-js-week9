@@ -33,6 +33,7 @@ module.exports = new EntitySchema({
             type: "varchar",
             length: 20,
             nullable: false,
+            default: "USER",
         },
         // created_at、updated_at（建立／更新時間，由系統自動帶入）
         createdAt: {

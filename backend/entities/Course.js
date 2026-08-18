@@ -32,12 +32,12 @@ module.exports = new EntitySchema({
         },
         // start_at timestamp 必填
         start_at: {
-            type: "timestamp",
+            type: "timestamptz",
             nullable: false,
         },
         // end_at timestamp 必填
         end_at: {
-            type: "timestamp",
+            type: "timestamptz",
             nullable: false,
         },
         // max_participants integer 必填
@@ -53,12 +53,12 @@ module.exports = new EntitySchema({
         },
         // created_at、updated_at（建立／更新時間，由系統自動帶入）
         createdAt: {
-            type: "timestamp",
+            type: "timestamptz",
             createDate: true,
             name: "created_at",
         },
         updatedAt: {
-            type: "timestamp",
+            type: "timestamptz",
             updateDate: true,
             name: "updated_at",
         }

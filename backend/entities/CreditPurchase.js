@@ -25,19 +25,18 @@ module.exports = new EntitySchema({
             nullable: false,
         },
         price_paid: {
-           type: "numeric",
-           precision: 10,
-           scale: 2,
+           type: "integer",
            nullable: false,
         },
         createdAt: {
-            type: "timestamp",
+            type: "timestamptz",
             createDate: true,
             name: "created_at",
             nullable: false,
         },
         purchaseAt: {
-            type: "timestamp",
+            type: "timestamptz",
+            createDate: true,
             name: "purchase_at",
             nullable: false,
         }

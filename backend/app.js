@@ -8,6 +8,8 @@ const skill = require("./router/skill");
 const creditPackage = require("./router/creditPackage");
 const users = require("./router/users");
 const admin = require("./router/admin");
+const coaches = require("./router/coaches");
+const courses = require("./router/courses");
 
 const app = express();
 app.use(cors());
@@ -17,6 +19,8 @@ app.use("/api/coaches/skill", skill);
 app.use("/api/credit-package", creditPackage);
 app.use("/api/users", users);
 app.use("/api/admin", admin);
+app.use("/api/coaches", coaches);
+app.use("/api/courses", courses);
 
 // API
 app.get("/healthcheck", async (req, res, next) => {
