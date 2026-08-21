@@ -13,7 +13,7 @@ const creditPackageController = {
                 select: {id: true, name: true, credit_amount: true, price: true},
             });
             // code	Description
-            // 200	成功取得技能列表（還沒有任何技能時回空陣列 []，不是錯誤）
+            // 200	成功取得方案列表（還沒有任何方案時回空陣列 []，不是錯誤）
             res.status(200).json({
                 status: "success",
                 data: creditPackages,
@@ -39,17 +39,19 @@ const creditPackageController = {
                 return next(appError(409, "資料重複"));
             }
             const newCreditPackage = await repo.save({
-                name,
+                name: name.trim(),
                 credit_amount,
                 price
             });
             // Code	Description
-            // 200	新增成功，回傳完整的技能資料（含後端產生的 id 與建立時間）
+            // 200	新增成功，回傳完整的方案資料（含後端產生的 id 與建立時間）
             res.json({
                 status: "success",
                 data: {
                     id: newCreditPackage.id,
                     name: newCreditPackage.name,
+                    credit_amount: newCreditPackage.credit_amount,
+                    price: newCreditPackage.price,
                     createdAt: newCreditPackage.createdAt,
                 },
             });

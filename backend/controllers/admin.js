@@ -371,8 +371,33 @@ const adminController = {
         }
     },
 
+    // 教練後台「營收報表」頁呼叫。需要登入，且登入者必須已經是教練。
+    
+    // ⚠️ 這支有三條「不寫出來你一定會猜錯」的隱形語意，請照著做：
+    // 1. 算哪一個月，看「報名建立時間」：一筆報名算進哪個月，依據是它「被建立的時間」，不是課程的上課時間。8 月報名 9 月的課，算 8 月的營收。已取消的報名不計。
+    // 2. 年份固定是伺服器的「當年」：?month= 收英文小寫月份名（january、february、…、december），不是數字、也不是 YYYY-MM。查 june 就是查「今年 6 月」，不支援跨年查詢。
+    // 3. 營收公式（floor 放在最後一步）：
+    //    3.1 單堂均價 = 全部購買方案的 Σprice ÷ Σcredit_amount（所有方案一起算，不是只算某一包）
+    //    3.2 營收 revenue = floor(該月未取消報名筆數 × 單堂均價)——先乘再無條件捨去，不要先把均價捨去再乘。
+    
+    // 可以手算驗證的範例：系統裡共 2 個方案——「10 堂 1000 元」＋「3 堂 1000 元」→ 單堂均價 = (1000+1000) ÷ (10+3) = 2000 ÷ 13 ≈ 153.846…；該月未取消報名 2 筆 → revenue = floor(2 × 153.846…) = floor(307.69…) = 307。
+
+    // 回傳欄位語意：
+    // * data.total.revenue：上面公式算出的整數營收
+    // * data.total.participants：該月不重複的報名學員數（同一人報多堂只算 1 人）
+    // * data.total.course_count：該月未取消的報名筆數（⚠️ 欄位名雖然叫 course_count，實際語意是報名數，跟 revenue 公式裡乘的數字是同一個）
+    // * 教練還沒開過任何課 → 直接回三個 0（200 成功，不是錯誤）
+
+    // 驗收口徑：狀態碼數字供參考，驗收只看 2xx／4xx 與 body 的 status 欄位。
     async getCoachRevenue (req, res, next) {
         try {
+            // Name     Description
+            // month    ⚠️ 英文小寫月份名（january～december），不是數字、不是 YYYY-MM。年份固定為伺服器當年。
+            // (string) Available values : january, february, march, april, may, june, july, august, september, october, november, december
+            // Example : june
+
+            // Code	Description
+            // 400  month 沒帶、或不是合法的英文小寫月份名（例如送了 6、June、2026-06）時觸發。
             const { id } = req.user
             const { month } = req.query
             if (!Object.prototype.hasOwnProperty.call(monthMap, month)) {
@@ -385,6 +410,8 @@ const adminController = {
             })
             const courseIds = courses.map(course => course.id)
             if (courseIds.length === 0) {
+                // Code	Description
+                // 200  成功取得該月營收統計；教練沒開過任何課時回三個 0（也是成功）
                 res.status(200).json({
                     status: 'success',
                     data: {
