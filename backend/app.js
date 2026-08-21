@@ -15,12 +15,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(bodyParser.json());
-app.use("/api/coaches/skill", skill);
-app.use("/api/credit-package", creditPackage);
-app.use("/api/users", users);
-app.use("/api/admin", admin);
-app.use("/api/coaches", coaches);
-app.use("/api/courses", courses);
 
 // API
 app.get("/healthcheck", async (req, res, next) => {
@@ -34,10 +28,18 @@ app.get("/healthcheck", async (req, res, next) => {
     }
 });
 
+app.use("/api/coaches/skill", skill);
+app.use("/api/users", users); // M5 1-2 + 1-3
+
+app.use("/api/credit-package", creditPackage); // M1 自行練習 + M5 1-1 自行練習
+app.use("/api/admin", admin); // M3 自行練習 + M6 自行練習
+app.use("/api/coaches", coaches); // M4 自行練習
+app.use("/api/courses", courses); // M4 自行練習 + M5
+
 app.use((req, res, next) => {
     // 這裡可以放置中間件或路由
 /*     res.status(404).json({ 
-        status: 404, 
+        status: "failed", 
         message: "找不到路由",
     }); */
     // new Error("找不到路由");

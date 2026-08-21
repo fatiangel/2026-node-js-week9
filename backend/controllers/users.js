@@ -90,7 +90,8 @@ const userController = {
             next(error);
         }
     },
-    async getProfile(req, res, next) {
+
+    async getUserProfile(req, res, next) {
         // req.user 是 isAuth middleware 掛上去的，裡面有 id、name、email、role、createdAt、updatedAt
         // isAuth 已經確認過使用者存在（查無此人會在那裡回 401「無效的 token」），這裡不用再查一次
         try {
@@ -107,7 +108,8 @@ const userController = {
             next(error);
         }
     },
-    async updateProfile(req, res, next) {
+
+    async updateUserProfile(req, res, next) {
         try {
             const { name } = req.body;
             // 觸發條件：name 缺漏或為空字串
@@ -142,7 +144,8 @@ const userController = {
             next(error);
         }
     },
-    async changePassword(req, res, next) {
+
+    async changeUserPassword(req, res, next) {
         try {
             const { password, new_password, confirm_new_password } = req.body;
 
@@ -185,7 +188,102 @@ const userController = {
         } catch (error) {
             next(error);
         }
-    }
+    },
+
+    // Code	Description
+    // 401	token 驗證失敗。下方是建議回應範例；驗收重點是 4xx + status: failed。
+    // 只有「請先登入」是固定錯誤訊息文字，必須完全相同。
+    // * 沒帶 Authorization header、或格式不是 Bearer ：「請先登入」
+    // * token 已過期：「Token 已過期」
+    // * token 無效（內容不對、或查無此使用者）：「無效的 token」 ⚠️「請先登入」是四句固定錯誤訊息文字之一，一個字都不能改。
+    // 已在 isAuth()中, 處理.
+    async getUserCreditPackages(req, res, next) {
+        // 回傳目前登入者買過的所有堂數方案紀錄。
+        // data 直接是「陣列」（不是物件包陣列）， 沒買過任何方案時回空陣列 []。
+
+        // 行為備註：
+        // 每筆形狀固定：{ name（方案名稱）, purchased_credits（買到的堂數）, price_paid（付了多少錢，數字）, purchase_at（購買時間）}。
+        // ⚠️ price_paid 回「數字」型別（例如 1400，不是字串 "1400.00"）。
+        // 排序：依 purchase_at 新到舊（最新買的排最前面）。
+        try {
+            const purchases = await dataSource.getRepository("CreditPurchase").find({
+                where: { user_id: req.user.id },
+                relations: { CreditPackage: true },
+                order: { purchaseAt: "DESC" },
+            });
+            res.status(200).json({
+                status: "success",
+                data: purchases.map((purchase) => ({
+                    name: purchase.CreditPackage.name,
+                    purchased_credits: purchase.purchased_credits,
+                    price_paid: purchase.price_paid,
+                    purchase_at: purchase.purchaseAt,
+                })),
+            });
+        } catch (error) {
+            next(error);
+        }
+    },
+
+    // Code	Description
+    // 401	token 驗證失敗。
+    // 下方是建議回應範例；驗收重點是 4xx + status: failed。
+    // 只有「請先登入」是固定錯誤訊息文字，必須完全相同。
+    // a. 沒帶 Authorization header、或格式不是 Bearer ：「請先登入」
+    // b. token 已過期：「Token 已過期」
+    // c. token 無效（內容不對、或查無此使用者）：「無效的 token」 ⚠️「請先登入」是四句固定錯誤訊息文字之一，一個字都不能改。
+    // 已在 isAuth()中, 處理.
+    async getUserCourses(req, res, next) {
+        // 回傳目前登入者的剩餘堂數、已使用堂數、以及所有報名過的課程清單（含已取消）。
+        // data 形狀固定三個欄位：
+        // a. credit_remain：剩餘堂數
+        // b. credit_usage：已使用堂數
+        // c. course_booking：報名紀錄陣列
+        
+        // 行為備註：
+        // a. ⚠️ credit_remain 的口徑：剩餘堂數 ＝「全部購買的堂數加總」−「未取消的報名數」。 
+        // 沒有任何地方存「餘額」這個欄位，每次都要用這條公式現算； 已取消的報名不佔堂數（取消會把堂數還回來）。
+        // b. credit_usage ＝ 未取消的報名數（跟上面公式的右半邊是同一個數字）。
+        // c. ⚠️ course_booking「包含已取消的報名」——cancelled_at 有值代表已取消、null 代表有效。 前端靠 cancelled_at 來顯示狀態，不要自作主張把已取消的過濾掉。
+        // d. 排序：依課程 start_at 由舊到新（ASC）。
+        // e. 每筆形狀：{ course_id, name, start_at, end_at, meeting_url, coach_name, cancelled_at }， coach_name 是開課教練的名稱、course_id 是 uuid 字串。
+        try {
+            const purchases = await dataSource.getRepository("CreditPurchase").find({
+                where: { user_id: req.user.id },
+            });
+            const totalPurchasedCredits = purchases.reduce(
+                (sum, purchase) => sum + purchase.purchased_credits,
+                0
+            );
+
+            const bookings = await dataSource.getRepository("CourseBooking").find({
+                where: { user_id: req.user.id },
+                relations: { course: { user: true } },
+                order: { course: { start_at: "ASC" } },
+            });
+            const activeBookingCount = bookings.filter((booking) => !booking.cancelledAt).length;
+
+            res.status(200).json({
+                status: "success",
+                data: {
+                    credit_remain: totalPurchasedCredits - activeBookingCount,
+                    credit_usage: activeBookingCount,
+                    course_booking: bookings.map((booking) => ({
+                        course_id: booking.course.id,
+                        name: booking.course.name,
+                        start_at: booking.course.start_at,
+                        end_at: booking.course.end_at,
+                        meeting_url: booking.course.meeting_url,
+                        coach_name: booking.course.user.name,
+                        cancelled_at: booking.cancelledAt,
+                    })),
+                },
+            });
+        } catch (error) {
+            next(error);
+        }
+    },
+
 };
 
 module.exports = userController;
